@@ -22,10 +22,33 @@ def get_market_cap(ticker):
     except Exception as e:
         return f"Error: {e}"
 
-def get_stock_price(ticker, date="2024-01-01"):
+def get_shares_outstanding(ticker):
     try:
-        # 指定された日付の株価を取得→とれていない。。
-        stock_price = ticker.history(start=date, end=date)["Close"].values[0]
+        # 企業の情報を取得
+        info = ticker.info
+        # 発行済株式数を取得
+        shares_outstanding = info.get("sharesOutstanding")
+        if shares_outstanding is None:
+            return f"Ticker {ticker} の発行済株式数(自社株除く)が見つかりませんでした。"
+        else:
+            return int(shares_outstanding)
+    except Exception as e:
+        return f"Error: {e}"
+
+def get_recent_stock_price(ticker):
+    try:
+        # 直近の株価を取得
+        stock_price = ticker.history(period="1d")["Close"].values[0]
+        
+        return int(stock_price)
+    except Exception as e:
+        return f"Error: {e}"
+
+def get_period_stock_price(ticker, start_date, end_date):
+    try:
+        # 指定された期間の株価を取得
+        stock_price = ticker.history(start=start_date,end = end_date)["Close"].values[0]
+        
         return int(stock_price)
     except Exception as e:
         return f"Error: {e}"
@@ -39,27 +62,29 @@ def main():
         next(reader)  # ヘッダー行をスキップ
         rows = list(reader)
 
-    # 時価総額を格納するリスト
-    market_caps = []
+    # 財務指標データを格納するリスト
+    financial_metrics = []
 
-    # 各銘柄コードについて時価総額を取得し、リストに追加する
+    # 各銘柄コードについて財務指標データを取得し、リストに追加する
     for row in rows:
         symbol = row[0] + ".T"
         company_name = row[1]
         ticker_obj = get_ticker_object(symbol)
         market_cap = get_market_cap(ticker_obj)
-        stock_price = get_stock_price(ticker_obj)
+        stock_price = get_period_stock_price(ticker_obj,"2024-01-04","2024-01-05")
+        stock_price_recent = get_recent_stock_price(ticker_obj)
+        shares_outstanding = get_shares_outstanding(ticker_obj)
+
         # 単位を億円に変換する
-        market_cap_billion = market_cap / 10**8 if market_cap else None
+        market_cap_billion = int((market_cap / 10**8 )) if market_cap else None
 
-        market_caps.append([symbol, company_name, market_cap_billion,stock_price])
+        financial_metrics.append([symbol, company_name, market_cap_billion,stock_price,stock_price_recent,round((stock_price_recent / stock_price) * 100, 1),shares_outstanding])
 
-
-    # 時価総額をCSVファイルに出力する
-    with open("market_cap.csv", "w", newline="") as file:
+    # 取得データをCSVファイルに出力する
+    with open("financial_metrics.csv", "w", newline="") as file:
         writer = csv.writer(file)
-        writer.writerow(["銘柄コード", "企業名", "時価総額[億円]","株価[円]"])
-        writer.writerows(market_caps)
+        writer.writerow(["銘柄コード", "企業名", "時価総額[億円]（自己株除く）","年初株価[円]","直近株価[円]","騰落率[%]","発行済株式数(自己株除く)"])
+        writer.writerows(financial_metrics)
 
 if __name__ == "__main__":
     main()
